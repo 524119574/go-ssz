@@ -1,8 +1,11 @@
+[![No Maintenance Intended](http://unmaintained.tech/badge.svg)](http://unmaintained.tech/)
 [![Build Status](https://badge.buildkite.com/5945b9820092260cdc05fc0c736f50df313e15929dd0c864c4.svg?branch=master)](https://buildkite.com/prysmatic-labs/go-ssz)
 [![codecov](https://codecov.io/gh/prysmaticlabs/go-ssz/branch/master/graph/badge.svg)](https://codecov.io/gh/prysmaticlabs/go-ssz)
 [![Documentation](https://godoc.org/github.com/prysmatic-labs/go-ssz?status.svg)](http://godoc.org/github.com/prysmatic-labs/go-ssz)
 [![Discord](https://user-images.githubusercontent.com/7288322/34471967-1df7808a-efbb-11e7-9088-ed0b04151291.png)](https://discord.gg/KSA7rPr)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/prysmaticlabs/geth-sharding?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+# DEPRECATED
+⛔️This is no longer supported⛔️ Please consider using [fastssz](https://github.com/ferranbt/fastssz) instead.
 
 # Simple Serialize (SSZ)
 Simple Serialize is the serialization algorithm standard for all data structures common across Ethereum 2.0 client implementations. It is outlined in the official [Ethereum 2.0 specification](https://github.com/ethereum/eth2.0-specs/blob/master/specs/simple-serialize.md). 
