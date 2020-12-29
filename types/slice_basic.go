@@ -1,8 +1,6 @@
 package types
 
 import (
-	"bytes"
-	"encoding/binary"
 	"reflect"
 )
 
@@ -10,65 +8,6 @@ type basicSliceSSZ struct{}
 
 func newBasicSliceSSZ() *basicSliceSSZ {
 	return &basicSliceSSZ{}
-}
-
-func (b *basicSliceSSZ) Root(val reflect.Value, typ reflect.Type, fieldName string, maxCapacity uint64) ([32]byte, error) {
-	var factory SSZAble
-	var limit uint64
-	var elemSize uint64
-	var err error
-	numItems := val.Len()
-	if numItems > 0 {
-		factory, err = SSZFactory(val.Index(0), typ.Elem())
-		if err != nil {
-			return [32]byte{}, err
-		}
-	}
-
-	if isBasicType(typ.Elem().Kind()) {
-		elemSize = determineFixedSize(val, typ.Elem())
-	} else {
-		elemSize = 32
-	}
-	limit = (maxCapacity*elemSize + 31) / 32
-	if limit == 0 {
-		if numItems == 0 {
-			limit = 1
-		} else {
-			limit = uint64(numItems)
-		}
-	}
-	leaves := make([][]byte, numItems)
-	for i := 0; i < numItems; i++ {
-		if isBasicType(val.Index(i).Kind()) {
-			innerBuf := make([]byte, elemSize)
-			if _, err = factory.Marshal(val.Index(i), typ.Elem(), innerBuf, 0); err != nil {
-				return [32]byte{}, err
-			}
-			leaves[i] = innerBuf
-		} else {
-			r, err := factory.Root(val.Index(i), typ.Elem(), fieldName, 0)
-			if err != nil {
-				return [32]byte{}, err
-			}
-			leaves[i] = r[:]
-		}
-	}
-	chunks, err := pack(leaves)
-	if err != nil {
-		return [32]byte{}, err
-	}
-	buf := new(bytes.Buffer)
-	if err := binary.Write(buf, binary.LittleEndian, uint64(val.Len())); err != nil {
-		return [32]byte{}, err
-	}
-	output := make([]byte, 32)
-	copy(output, buf.Bytes())
-	merkleRoot, err := bitwiseMerkleize(chunks, uint64(len(chunks)), limit)
-	if err != nil {
-		return [32]byte{}, err
-	}
-	return mixInLength(merkleRoot, output), nil
 }
 
 func (b *basicSliceSSZ) Marshal(val reflect.Value, typ reflect.Type, buf []byte, startOffset uint64) (uint64, error) {

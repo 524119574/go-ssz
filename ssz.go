@@ -3,12 +3,10 @@ package ssz
 import (
 	"fmt"
 	"reflect"
-	"strings"
 
 	fssz "github.com/ferranbt/fastssz"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/go-ssz/types"
+	"github.com/524119574/go-ssz/types"
 )
 
 // Marshal a value and output the result into a byte slice.
@@ -126,100 +124,4 @@ func Unmarshal(input []byte, val interface{}) error {
 		)
 	}
 	return nil
-}
-
-// HashTreeRoot determines the root hash using SSZ's Merkleization.
-// Given a struct with the following fields, one can tree hash it as follows:
-//  type exampleStruct struct {
-//      Field1 uint8
-//      Field2 []byte
-//  }
-//
-//  ex := exampleStruct{
-//      Field1: 10,
-//      Field2: []byte{1, 2, 3, 4},
-//  }
-//  root, err := HashTreeRoot(ex)
-//  if err != nil {
-//      return errors.Wrap(err, "failed to compute root")
-//  }
-func HashTreeRoot(val interface{}) ([32]byte, error) {
-	if val == nil {
-		return [32]byte{}, errors.New("untyped nil is not supported")
-	}
-	rval := reflect.ValueOf(val)
-	factory, err := types.SSZFactory(rval, rval.Type())
-	if err != nil {
-		return [32]byte{}, errors.Wrapf(err, "could not generate tree hasher for type: %v", rval.Type())
-	}
-	return factory.Root(rval, rval.Type(), "", 0)
-}
-
-// HashTreeRootBitfield determines the root hash of a bitfield type using SSZ's Merkleization.
-func HashTreeRootBitfield(bfield bitfield.Bitfield, maxCapacity uint64) ([32]byte, error) {
-	if b, ok := bfield.(bitfield.Bitvector4); ok {
-		return types.Bitvector4Root(b, 4)
-	}
-	return types.BitlistRoot(bfield, maxCapacity)
-}
-
-// HashTreeRootWithCapacity determines the root hash of a dynamic list
-// using SSZ's Merkleization and applies a max capacity value when computing the root.
-// If the input is not a slice, the function returns an error.
-//
-//  accountBalances := []uint64{1, 2, 3, 4}
-//  root, err := HashTreeRootWithCapacity(accountBalances, 100) // Max 100 accounts.
-//  if err != nil {
-//      return errors.Wrap(err, "failed to compute root")
-//  }
-func HashTreeRootWithCapacity(val interface{}, maxCapacity uint64) ([32]byte, error) {
-	if val == nil {
-		return [32]byte{}, errors.New("untyped nil is not supported")
-	}
-	rval := reflect.ValueOf(val)
-	if rval.Kind() != reflect.Slice {
-		return [32]byte{}, fmt.Errorf("expected slice-kind input, received %v", rval.Kind())
-	}
-	factory, err := types.SSZFactory(rval, rval.Type())
-	if err != nil {
-		return [32]byte{}, errors.Wrapf(err, "could not generate tree hasher for type: %v", rval.Type())
-	}
-	return factory.Root(rval, rval.Type(), "", maxCapacity)
-}
-
-// SigningRoot truncates the last property of the struct passed in
-// and returns its tree hash. This is done because the last property
-// usually contains the signature that which this data is the root for.
-//
-// Deprecated: Prefer signed container objects rather than using signing root.
-func SigningRoot(val interface{}) ([32]byte, error) {
-	if val == nil {
-		return [32]byte{}, errors.New("value cannot be nil")
-	}
-	valObj := reflect.ValueOf(val)
-	if valObj.Type().Kind() == reflect.Ptr {
-		if valObj.IsNil() {
-			return [32]byte{}, errors.New("nil pointer given")
-		}
-		elem := valObj.Elem()
-		elemType := valObj.Elem().Type()
-		totalFields := 0
-		for i := 0; i < elemType.NumField(); i++ {
-			// We skip protobuf related metadata fields.
-			if strings.Contains(elemType.Field(i).Name, "XXX_") {
-				continue
-			}
-			totalFields++
-		}
-		return types.StructFactory.FieldsHasher(elem, elemType, totalFields-1)
-	}
-	totalFields := 0
-	for i := 0; i < valObj.Type().NumField(); i++ {
-		// We skip protobuf related metadata fields.
-		if strings.Contains(valObj.Type().Field(i).Name, "XXX_") {
-			continue
-		}
-		totalFields++
-	}
-	return types.StructFactory.FieldsHasher(valObj, valObj.Type(), totalFields-1)
 }

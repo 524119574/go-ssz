@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"log"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 // UnboundedSSZFieldSizeMarker is the character used to specify a ssz field should have
@@ -23,60 +23,8 @@ func newStructSSZ() *structSSZ {
 	return &structSSZ{}
 }
 
-func (b *structSSZ) Root(val reflect.Value, typ reflect.Type, fieldName string, maxCapacity uint64) ([32]byte, error) {
-	if typ.Kind() == reflect.Ptr {
-		if val.IsNil() {
-			instance := reflect.New(typ.Elem()).Elem()
-			return b.Root(instance, instance.Type(), fieldName, maxCapacity)
-		}
-		return b.Root(val.Elem(), typ.Elem(), fieldName, maxCapacity)
-	}
-	numFields := typ.NumField()
-	return b.FieldsHasher(val, typ, numFields)
-}
-
-func (b *structSSZ) FieldsHasher(val reflect.Value, typ reflect.Type, numFields int) ([32]byte, error) {
-	roots := make([][]byte, numFields)
-	var err error
-	totalCountedFields := uint64(0)
-	structName := typ.Name()
-	for i := 0; i < numFields; i++ {
-		// We skip protobuf related metadata fields.
-		if strings.HasPrefix(typ.Field(i).Name, "XXX_") {
-			continue
-		}
-		totalCountedFields++
-		fCapacity := determineFieldCapacity(typ.Field(i))
-		if b, ok := val.Field(i).Interface().(bitfield.Bitlist); ok {
-			r, err := BitlistRoot(b, fCapacity)
-			if err != nil {
-				return [32]byte{}, nil
-			}
-			roots[i] = r[:]
-			continue
-		}
-		fType, err := determineFieldType(typ.Field(i))
-		if err != nil {
-			return [32]byte{}, err
-		}
-		factory, err := SSZFactory(val.Field(i), fType)
-		if err != nil {
-			return [32]byte{}, err
-		}
-		r, err := factory.Root(val.Field(i), fType, structName+"."+typ.Field(i).Name, fCapacity)
-		if err != nil {
-			return [32]byte{}, err
-		}
-		roots[i] = r[:]
-	}
-	root, err := bitwiseMerkleize(roots, totalCountedFields, totalCountedFields)
-	if err != nil {
-		return [32]byte{}, err
-	}
-	return root, nil
-}
-
 func (b *structSSZ) Marshal(val reflect.Value, typ reflect.Type, buf []byte, startOffset uint64) (uint64, error) {
+	log.Printf("weiwu")
 	if typ.Kind() == reflect.Ptr {
 		if val.IsNil() {
 			newVal := reflect.New(typ.Elem()).Elem()
@@ -89,10 +37,6 @@ func (b *structSSZ) Marshal(val reflect.Value, typ reflect.Type, buf []byte, sta
 	// For every field, we add up the total length of the items depending if they
 	// are variable or fixed-size fields.
 	for i := 0; i < typ.NumField(); i++ {
-		// We skip protobuf related metadata fields.
-		if strings.Contains(typ.Field(i).Name, "XXX_") {
-			continue
-		}
 		fType, err := determineFieldType(typ.Field(i))
 		if err != nil {
 			return 0, err
@@ -107,14 +51,10 @@ func (b *structSSZ) Marshal(val reflect.Value, typ reflect.Type, buf []byte, sta
 				fixedLength += determineFixedSize(val.Field(i), fType)
 			}
 		}
+		log.Printf("fixed length: %d", fixedLength)
 	}
 	currentOffsetIndex := startOffset + fixedLength
-	nextOffsetIndex := currentOffsetIndex
 	for i := 0; i < typ.NumField(); i++ {
-		// We skip protobuf related metadata fields.
-		if strings.Contains(typ.Field(i).Name, "XXX_") {
-			continue
-		}
 		fType, err := determineFieldType(typ.Field(i))
 		if err != nil {
 			return 0, err
@@ -129,7 +69,7 @@ func (b *structSSZ) Marshal(val reflect.Value, typ reflect.Type, buf []byte, sta
 				return 0, err
 			}
 		} else {
-			nextOffsetIndex, err = factory.Marshal(val.Field(i), fType, buf, currentOffsetIndex)
+			nextOffsetIndex, err := factory.Marshal(val.Field(i), fType, buf, currentOffsetIndex)
 			if err != nil {
 				return 0, err
 			}
@@ -142,6 +82,7 @@ func (b *structSSZ) Marshal(val reflect.Value, typ reflect.Type, buf []byte, sta
 			currentOffsetIndex = nextOffsetIndex
 			fixedIndex += BytesPerLengthOffset
 		}
+		log.Printf("current offset index: %d, fixed index: %d", currentOffsetIndex, fixedIndex)
 	}
 	return currentOffsetIndex, nil
 }
@@ -278,6 +219,7 @@ func determineFieldCapacity(field reflect.StructField) uint64 {
 	return val
 }
 
+// TODO: change this.
 func parseSSZFieldTags(field reflect.StructField) ([]uint64, bool, error) {
 	tag, exists := field.Tag.Lookup("ssz-size")
 	if !exists {

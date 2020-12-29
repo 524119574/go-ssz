@@ -28,7 +28,6 @@ var compositeSliceFactory = newCompositeSliceSSZ()
 // hash tree root according to the Simple Serialize specification.
 // See: https://github.com/ethereum/eth2.0-specs/blob/v0.8.2/specs/simple-serialize.md.
 type SSZAble interface {
-	Root(val reflect.Value, typ reflect.Type, fieldName string, maxCapacity uint64) ([32]byte, error)
 	Marshal(val reflect.Value, typ reflect.Type, buf []byte, startOffset uint64) (uint64, error)
 	Unmarshal(val reflect.Value, typ reflect.Type, buf []byte, startOffset uint64) (uint64, error)
 }

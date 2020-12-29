@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/ristretto"
-	"github.com/minio/highwayhash"
 )
 
 // BasicArraySizeCache for HashTreeRoot.
@@ -28,50 +27,6 @@ func newBasicArraySSZ() *basicArraySSZ {
 	return &basicArraySSZ{
 		hashCache: cache,
 	}
-}
-
-func (b *basicArraySSZ) Root(val reflect.Value, typ reflect.Type, fieldName string, maxCapacity uint64) ([32]byte, error) {
-	numItems := val.Len()
-	hashKeyElements := make([]byte, BytesPerChunk*numItems)
-	emptyKey := highwayhash.Sum(hashKeyElements, fastSumHashKey[:])
-	leaves := make([][]byte, numItems)
-	offset := 0
-	var factory SSZAble
-	var err error
-	if numItems > 0 {
-		factory, err = SSZFactory(val.Index(0), typ.Elem())
-		if err != nil {
-			return [32]byte{}, err
-		}
-	}
-	for i := 0; i < numItems; i++ {
-		r, err := factory.Root(val.Index(i), typ.Elem(), "", 0)
-		if err != nil {
-			return [32]byte{}, err
-		}
-		leaves[i] = r[:]
-		copy(hashKeyElements[offset:offset+32], r[:])
-		offset += 32
-	}
-	hashKey := highwayhash.Sum(hashKeyElements, fastSumHashKey[:])
-	if enableCache && hashKey != emptyKey {
-		res, ok := b.hashCache.Get(string(hashKey[:]))
-		if res != nil && ok {
-			return res.([32]byte), nil
-		}
-	}
-	chunks, err := pack(leaves)
-	if err != nil {
-		return [32]byte{}, err
-	}
-	root, err := bitwiseMerkleize(chunks, uint64(len(chunks)), uint64(len(chunks)))
-	if err != nil {
-		return [32]byte{}, err
-	}
-	if enableCache && hashKey != emptyKey {
-		b.hashCache.Set(string(hashKey[:]), root, 32)
-	}
-	return root, nil
 }
 
 func (b *basicArraySSZ) Marshal(val reflect.Value, typ reflect.Type, buf []byte, startOffset uint64) (uint64, error) {

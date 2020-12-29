@@ -11,45 +11,6 @@ func newCompositeArraySSZ() *compositeArraySSZ {
 	return &compositeArraySSZ{}
 }
 
-func (b *compositeArraySSZ) Root(val reflect.Value, typ reflect.Type, fieldName string, maxCapacity uint64) ([32]byte, error) {
-	var factory SSZAble
-	var err error
-	numItems := val.Len()
-	if numItems > 0 {
-		factory, err = SSZFactory(val.Index(0), typ.Elem())
-		if err != nil {
-			return [32]byte{}, err
-		}
-	}
-	roots := make([][]byte, numItems)
-	elemSize := uint64(0)
-	if isBasicType(typ.Elem().Kind()) {
-		elemSize = determineFixedSize(val, typ.Elem())
-	} else {
-		elemSize = 32
-	}
-	limit := (uint64(val.Len())*elemSize + 31) / 32
-	for i := 0; i < val.Len(); i++ {
-		r, err := factory.Root(val.Index(i), typ.Elem(), "", 0)
-		if err != nil {
-			return [32]byte{}, err
-		}
-		roots[i] = r[:]
-	}
-	chunks, err := pack(roots)
-	if err != nil {
-		return [32]byte{}, err
-	}
-	if val.Len() == 0 {
-		chunks = [][]byte{}
-	}
-	root, err := bitwiseMerkleize(chunks, uint64(len(chunks)), limit)
-	if err != nil {
-		return [32]byte{}, err
-	}
-	return root, nil
-}
-
 func (b *compositeArraySSZ) Marshal(val reflect.Value, typ reflect.Type, buf []byte, startOffset uint64) (uint64, error) {
 	index := startOffset
 	if val.Len() == 0 {

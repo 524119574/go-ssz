@@ -1,7 +1,6 @@
 package types
 
 import (
-	"bytes"
 	"encoding/binary"
 	"reflect"
 )
@@ -10,52 +9,6 @@ type compositeSliceSSZ struct{}
 
 func newCompositeSliceSSZ() *compositeSliceSSZ {
 	return &compositeSliceSSZ{}
-}
-
-func (b *compositeSliceSSZ) Root(val reflect.Value, typ reflect.Type, fieldName string, maxCapacity uint64) ([32]byte, error) {
-	output := make([]byte, 32)
-	if val.Len() == 0 && maxCapacity == 0 {
-		root, err := bitwiseMerkleize([][]byte{}, 0, 0)
-		if err != nil {
-			return [32]byte{}, err
-		}
-		return mixInLength(root, output), nil
-	}
-	numItems := val.Len()
-	var factory SSZAble
-	var err error
-	if numItems > 0 {
-		factory, err = SSZFactory(val.Index(0), typ.Elem())
-		if err != nil {
-			return [32]byte{}, err
-		}
-	}
-	roots := make([][]byte, numItems)
-	for i := 0; i < numItems; i++ {
-		r, err := factory.Root(val.Index(i), typ.Elem(), fieldName, 0)
-		if err != nil {
-			return [32]byte{}, err
-		}
-		roots[i] = r[:]
-	}
-	chunks, err := pack(roots)
-	if err != nil {
-		return [32]byte{}, err
-	}
-	buf := new(bytes.Buffer)
-	if err := binary.Write(buf, binary.LittleEndian, uint64(val.Len())); err != nil {
-		return [32]byte{}, err
-	}
-	copy(output, buf.Bytes())
-	objLen := maxCapacity
-	if maxCapacity == 0 {
-		objLen = uint64(val.Len())
-	}
-	root, err := bitwiseMerkleize(chunks, uint64(len(chunks)), objLen)
-	if err != nil {
-		return [32]byte{}, err
-	}
-	return mixInLength(root, output), nil
 }
 
 func (b *compositeSliceSSZ) Marshal(val reflect.Value, typ reflect.Type, buf []byte, startOffset uint64) (uint64, error) {

@@ -1,14 +1,11 @@
 package types
 
 import (
-	"bytes"
 	"fmt"
 	"reflect"
 	"sync"
 
 	"github.com/dgraph-io/ristretto"
-	"github.com/minio/highwayhash"
-	"github.com/protolambda/zssz/merkle"
 )
 
 // RootsArraySizeCache for hash tree root.
@@ -33,75 +30,6 @@ func newRootsArraySSZ() *rootsArraySSZ {
 		cachedLeaves: make(map[string][][]byte),
 		layers:       make(map[string][][][]byte),
 	}
-}
-
-func (a *rootsArraySSZ) Root(val reflect.Value, typ reflect.Type, fieldName string, maxCapacity uint64) ([32]byte, error) {
-	numItems := val.Len()
-	// We make sure to look into the cache only if a field name is provided, that is,
-	// if this function is called when calling HashTreeRoot on a struct type that has
-	// a field which is an array of roots. An example is:
-	//
-	// type BeaconState struct {
-	//   BlockRoots [2048][32]byte
-	// }
-	//
-	// which would allow us to look into the cache by the field "BlockRoots".
-	if enableCache && fieldName != "" {
-		if _, ok := a.layers[fieldName]; !ok {
-			depth := merkle.GetDepth(uint64(numItems))
-			a.layers[fieldName] = make([][][]byte, depth+1)
-		}
-	}
-	hashKeyElements := make([]byte, BytesPerChunk*numItems)
-	emptyKey := highwayhash.Sum(hashKeyElements, fastSumHashKey[:])
-	offset := 0
-	leaves := make([][]byte, numItems)
-	changedIndices := make([]int, 0)
-	for i := 0; i < numItems; i++ {
-		var item [32]byte
-		if res, ok := val.Index(i).Interface().([]byte); ok {
-			item = toBytes32(res)
-		} else if res, ok := val.Index(i).Interface().([32]byte); ok {
-			item = res
-		} else {
-			return [32]byte{}, fmt.Errorf("expected array or slice of len 32, received %v", val.Index(i))
-		}
-		leaves[i] = item[:]
-		copy(hashKeyElements[offset:offset+32], leaves[i])
-		offset += 32
-		if enableCache && fieldName != "" {
-			if _, ok := a.cachedLeaves[fieldName]; ok {
-				if !bytes.Equal(leaves[i], a.cachedLeaves[fieldName][i]) {
-					changedIndices = append(changedIndices, i)
-				}
-			}
-		}
-	}
-	chunks := leaves
-	// Recompute the root from the modified branches from the previous call
-	// to this function.
-	if len(changedIndices) > 0 {
-		var rt [32]byte
-		for i := 0; i < len(changedIndices); i++ {
-			rt = a.recomputeRoot(changedIndices[i], chunks, fieldName)
-		}
-		return rt, nil
-	}
-	hashKey := highwayhash.Sum(hashKeyElements, fastSumHashKey[:])
-	if enableCache && hashKey != emptyKey {
-		res, ok := a.hashCache.Get(string(hashKey[:]))
-		if res != nil && ok {
-			return res.([32]byte), nil
-		}
-	}
-	root := a.merkleize(chunks, fieldName)
-	if enableCache && fieldName != "" {
-		a.cachedLeaves[fieldName] = leaves
-	}
-	if enableCache && hashKey != emptyKey {
-		a.hashCache.Set(string(hashKey[:]), root, 32)
-	}
-	return root, nil
 }
 
 func (a *rootsArraySSZ) Marshal(val reflect.Value, typ reflect.Type, buf []byte, startOffset uint64) (uint64, error) {
